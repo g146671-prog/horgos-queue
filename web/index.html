@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://gc.zgo.at; style-src 'unsafe-inline'; img-src 'self' data: https://gc.zgo.at; connect-src 'self' https://*.goatcounter.com; base-uri 'none'; form-action 'none'">
+<title>Очередь на выезд из Хоргоса — прогноз</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #e4e2da;
+    --accent: #1f6f5c; --accent-soft: #e3f0ec; --warn: #9a5b00; --warn-soft: #fbf0dc; --bar: #9cc5b8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151614; --card: #1f201d; --ink: #ecebe6; --muted: #a09f98; --line: #33342f;
+      --accent: #6fc7ad; --accent-soft: #23352f; --warn: #f0b860; --warn-soft: #3a2f1c; --bar: #3f7d6c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; line-height: 1.25; margin: 4px 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .row { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; font: inherit; font-size: 20px; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; padding: 10px 16px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--card); cursor: pointer; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .err { color: var(--warn); font-size: 14px; margin-top: 8px; }
+  .big { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .k { font-size: 13px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-top: 14px; }
+  .eta { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .eta .date { font-size: 24px; font-weight: 700; }
+  .range { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; margin-top: 8px; color: var(--muted); }
+  .note { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 12px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; font-size: 14px; padding: 8px 12px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--muted); font-size: 10px; }
+  #chart svg { max-width: 560px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  th.n { text-align: right; }
+  tr.sel td { color: var(--accent); font-weight: 600; }
+  .foot { font-size: 12px; color: var(--muted); margin-top: 18px; }
+  .foot a { color: inherit; }
+  .author { font-size: 13px; color: var(--muted); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .author a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .ad-banner { background: var(--card); border: 1px dashed var(--line); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 14px; text-align: center; color: var(--muted); font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Когда моя машина выедет из Хоргоса?</h1>
+  <p class="sub">Прогноз по табло очереди на выезд из Китая. Номер считается только у вас в браузере и никуда не отправляется.</p>
+
+  <section class="card">
+    <form id="f" autocomplete="off">
+      <label for="num">Номер брони в очереди</label>
+      <div class="row">
+        <input id="num" placeholder="ZLA001234" inputmode="text" spellcheck="false" maxlength="16">
+        <button type="submit">Считать</button>
+      </div>
+      <div class="hint">Три латинские буквы категории и цифры, например ZLA001234 (ZLA — автовозы).</div>
+      <div class="err" id="err" hidden></div>
+    </form>
+  </section>
+
+  <div class="ad-banner">Место для вашей рекламы</div>
+
+  <section class="card" id="result" hidden>
+    <div class="k" id="r-cat"></div>
+    <div class="grid">
+      <div><div class="k">Перед вами</div><div class="big" id="r-ahead"></div></div>
+      <div><div class="k">Сейчас на табло</div><div class="big" id="r-cur"></div></div>
+    </div>
+    <div class="eta" id="r-eta-box">
+      <div class="k">Ожидаемый выезд из Китая</div>
+      <div class="date" id="r-eta"></div>
+      <div class="range"><span id="r-fast"></span><span id="r-slow"></span></div>
+    </div>
+    <div class="k" style="margin-top:10px" id="r-speed"></div>
+    <div class="note" id="r-note" hidden></div>
+    <div class="actions">
+      <button class="ghost" type="button" id="share">Скопировать ссылку на мой прогноз</button>
+    </div>
+  </section>
+
+  <section class="card" id="chart-card" hidden>
+    <h2 id="chart-title">Сколько проходит за сутки</h2>
+    <div id="chart"></div>
+    <div class="hint">Полные сутки по пекинскому времени. Пекин = Москва + 5 ч, сутки на табло заканчиваются в 19:00 по Москве.</div>
+  </section>
+
+  <section class="card">
+    <h2>Табло сейчас</h2>
+    <div class="k" id="board-time">Загружаю данные…</div>
+    <table id="board" style="margin-top:8px" hidden>
+      <thead><tr><th>Категория</th><th class="n">На табло</th><th class="n">Сегодня</th><th class="n">Вчера</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <p class="foot">
+    Данные берутся с неофициального табло <a href="https://xorgos.com/" rel="noopener noreferrer" target="_blank">xorgos.com</a> раз в 15 минут.
+    Прогноз — оценка по средней скорости за последние трое полных суток; диапазон — по самым быстрым и медленным суткам за две недели.
+    Праздники, закрытия пункта пропуска и проверки могут сдвинуть сроки.
+  </p>
+  <p class="author">
+    Сделал Антон Плеханов — создание приложений.<br>
+    Telegram: <a href="https://t.me/a146671" rel="noopener noreferrer" target="_blank">@a146671</a>
+  </p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var DATA_URL = "data/data.json";
+  var DAY_MS = 86400000;
+  var data = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Анонимная статистика через GoatCounter (без cookies, без персональных данных).
+  // Уникальность определяется здесь, в браузере.
+  var cameByLink = location.hash.length > 1;
+  function gcEvent(name) {
+    if (window.goatcounter && goatcounter.count) {
+      try { goatcounter.count({ path: name, event: true }); } catch (e) {}
+    }
+  }
+  function once(storage, key, value) {
+    try {
+      if (storage.getItem(key) === value) return false;
+      storage.setItem(key, value);
+      return true;
+    } catch (e) { return false; }
+  }
+  var fmtInt = new Intl.NumberFormat("ru-RU");
+  var fmtDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "Europe/Moscow" });
+  var fmtDateWd = new Intl.DateTimeFormat("ru-RU", { weekday: "short", day: "numeric", month: "long", timeZone: "Europe/Moscow" });
+  var fmtDT = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
+
+  // Время табло — пекинское (UTC+8) → момент UTC
+  function beijingToDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(s || "");
+    if (!m) return null;
+    return new Date(Date.UTC(+m[1], m[2] - 1, +m[3], m[4] - 8, +m[5], +m[6]));
+  }
+
+  // Кириллица, похожая на латиницу, — частая опечатка
+  var LOOK = { "А":"A","В":"B","С":"C","Е":"E","Н":"H","К":"K","М":"M","О":"O","Р":"P","Т":"T","Х":"X","У":"Y","З":"Z" };
+  function parseNum(raw) {
+    var s = String(raw || "").toUpperCase().replace(/\s|-/g, "").replace(/[А-ЯЁ]/g, function (c) { return LOOK[c] || c; });
+    var m = /^([A-Z]{3})(\d{1,9})$/.exec(s);
+    if (!m) return null;
+    return { prefix: m[1], n: parseInt(m[2], 10), code: m[1] + m[2] };
+  }
+
+  function plural(n, a, b, c) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return a;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b;
+    return c;
+  }
+
+  function stats(t) {
+    var full = (t.daily || []).map(function (d) { return d.count; });
+    var last3 = full.slice(-3);
+    var last14 = full.slice(-14).filter(function (x) { return x > 0; });
+    var avg = last3.length ? last3.reduce(function (a, b) { return a + b; }, 0) / last3.length : 0;
+    return {
+      avg: avg, n: last3.length,
+      fast: last14.length ? Math.max.apply(null, last14) : 0,
+      slow: last14.length ? Math.min.apply(null, last14) : 0
+    };
+  }
+
+  function show(q) {
+    $("err").hidden = true;
+    var t = data && data.types[q.prefix];
+    if (!t) {
+      $("result").hidden = true;
+      $("err").textContent = "Категории " + q.prefix + " нет на табло. Есть: " + Object.keys(data.types).join(", ") + ".";
+      $("err").hidden = false;
+      return;
+    }
+    var boardAt = beijingToDate(data.board_time);
+    var ahead = q.n - t.current;
+    var s = stats(t);
+
+    $("r-cat").textContent = t.name + " (" + q.prefix + ") · ваш номер " + q.code;
+    $("r-cur").textContent = fmtInt.format(t.current);
+    $("r-note").hidden = true;
+
+    if (ahead <= 0) {
+      $("r-ahead").textContent = "0";
+      $("r-eta").textContent = "Автовоз с вашим номером пересёк границу";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "Табло дошло до " + q.prefix + String(t.current).padStart(6, "0") + ".";
+    } else {
+      $("r-ahead").textContent = fmtInt.format(ahead);
+      if (!s.avg) {
+        $("r-eta").textContent = "Пока мало данных";
+        $("r-fast").textContent = ""; $("r-slow").textContent = "";
+        $("r-speed").textContent = "";
+      } else {
+        var eta = new Date(boardAt.getTime() + ahead / s.avg * DAY_MS);
+        var days = Math.ceil(ahead / s.avg);
+        $("r-eta").textContent = "≈ " + fmtDateWd.format(eta);
+        $("r-fast").textContent = s.fast > s.avg ? "быстро: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.fast * DAY_MS)) : "";
+        $("r-slow").textContent = s.slow < s.avg ? "медленно: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.slow * DAY_MS)) : "";
+        $("r-speed").textContent = "Средняя скорость " + Math.round(s.avg) + " в сутки (за " + s.n + " " +
+          plural(s.n, "полные сутки", "полных суток", "полных суток") + ") — примерно " + days + " " + plural(days, "день", "дня", "дней") + " ожидания.";
+      }
+    }
+    if (Date.now() - new Date(data.fetched_utc).getTime() > 3 * 3600000) {
+      $("r-note").textContent = "Данные не обновлялись больше 3 часов — табло могло быть недоступно. Прогноз может быть устаревшим.";
+      $("r-note").hidden = false;
+    }
+    $("result").hidden = false;
+    drawChart(q.prefix, t, s.avg);
+    highlight(q.prefix);
+  }
+
+  function drawChart(prefix, t, avg) {
+    var d = (t.daily || []).slice(-14);
+    if (!d.length) { $("chart-card").hidden = true; return; }
+    $("chart-title").textContent = "Сколько " + prefix + " проходит за сутки";
+    var W = 360, H = 150, pad = 20, bw = (W - 8) / d.length;
+    var max = Math.max.apply(null, d.map(function (x) { return x.count; }).concat([1]));
+    var parts = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Проход за сутки">'];
+    d.forEach(function (x, i) {
+      var h = (H - pad * 2) * x.count / max, xx = 4 + i * bw;
+      parts.push('<rect x="' + (xx + 3) + '" y="' + (H - pad - h) + '" width="' + (bw - 6) + '" height="' + h + '" rx="3" fill="var(--bar)"></rect>');
+      parts.push('<text x="' + (xx + bw / 2) + '" y="' + (H - pad - h - 4) + '" text-anchor="middle">' + x.count + '</text>');
+      parts.push('<text x="' + (xx + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + x.date.slice(8) + '.' + x.date.slice(5, 7) + '</text>');
+    });
+    if (avg) {
+      var y = H - pad - (H - pad * 2) * avg / max;
+      parts.push('<line x1="4" x2="' + (W - 4) + '" y1="' + y + '" y2="' + y + '" stroke="var(--accent)" stroke-dasharray="4 4"></line>');
+    }
+    parts.push("</svg>");
+    $("chart").innerHTML = parts.join("");
+    $("chart-card").hidden = false;
+  }
+
+  function renderBoard() {
+    var at = beijingToDate(data.board_time);
+    $("board-time").textContent = "Обновлено " + (at ? fmtDT.format(at) + " по Москве" : data.board_time) + " (на табло " + data.board_time.slice(11, 16) + " по Пекину)";
+    var tb = document.querySelector("#board tbody");
+    tb.textContent = "";
+    Object.keys(data.types).forEach(function (p) {
+      var t = data.types[p], tr = document.createElement("tr");
+      tr.dataset.p = p;
+      [t.name + " (" + p + ")", fmtInt.format(t.current), t.today, t.yesterday].forEach(function (v, i) {
+        var td = document.createElement("td");
+        td.textContent = v;
+        if (i) td.className = "n";
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    $("board").hidden = false;
+  }
+
+  function highlight(p) {
+    document.querySelectorAll("#board tbody tr").forEach(function (tr) { tr.classList.toggle("sel", tr.dataset.p === p); });
+  }
+
+  function remember(code) {
+    try { localStorage.setItem("q05-num", code); } catch (e) {}
+    // номер в «#», а не в «?»: часть после # браузер на сервер не отправляет
+    try { history.replaceState(null, "", "#" + code); } catch (e) { location.hash = code; }
+  }
+
+  function initial() {
+    var fromHash = parseNum(decodeURIComponent(location.hash.slice(1)));
+    if (fromHash) return fromHash;
+    try { return parseNum(localStorage.getItem("q05-num")); } catch (e) { return null; }
+  }
+
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = parseNum($("num").value);
+    if (!q) {
+      $("err").textContent = "Не похоже на номер брони. Нужно три латинские буквы и цифры, например ZLA001234.";
+      $("err").hidden = false;
+      return;
+    }
+    $("num").value = q.prefix + String(q.n).padStart(6, "0");
+    remember(q.code);
+    gcEvent("hit-" + q.prefix);
+    if (data) show(q);
+  });
+
+  $("share").addEventListener("click", function () {
+    gcEvent("share");
+    var url = location.href;
+    var done = function () { $("share").textContent = "Ссылка скопирована"; setTimeout(function () { $("share").textContent = "Скопировать ссылку на мой прогноз"; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { prompt("Скопируйте ссылку:", url); });
+    else prompt("Скопируйте ссылку:", url);
+  });
+
+  function load() {
+    var p = window.DEMO_DATA ? Promise.resolve(window.DEMO_DATA)
+      : fetch(DATA_URL + "?_=" + Math.floor(Date.now() / 60000), { cache: "no-store" }).then(function (r) {
+          if (!r.ok) throw new Error(r.status); return r.json();
+        });
+    return p.then(function (d) {
+      data = d;
+      renderBoard();
+      var q = initial() || (window.DEMO_DATA ? parseNum("ZLA001234") : null);
+      if (q) { $("num").value = q.prefix + String(q.n).padStart(6, "0"); show(q); }
+    }).catch(function () {
+      $("board-time").textContent = "Не удалось загрузить данные. Обновите страницу чуть позже.";
+    });
+  }
+  if (!window.DEMO_DATA && once(sessionStorage, "q05-open", "1")) gcEvent(cameByLink ? "open-link" : "open");
+  load();
+  setInterval(function () { if (!window.DEMO_DATA && document.visibilityState === "visible") load(); }, 5 * 60000);
+})();
+</script>
+<!-- GoatCounter: бесплатная анонимная аналитика без cookies.
+     Замените YOURCODE на ваш код из goatcounter.com -->
+<script data-goatcounter="https://YOURCODE.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

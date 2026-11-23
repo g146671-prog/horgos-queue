@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Статистика трекера</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1b1f24; --muted:#6a7380; --line:#e3e6ea; --accent:#2f6fed; --accent2:#9db8f5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171b; --card:#1d2227; --text:#e8eaed; --muted:#9aa3ad; --line:#2b3138; --accent:#6c9bff; --accent2:#35507f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 2px; }
+  h2 { font-size:15px; margin:0 0 10px; color:var(--muted); font-weight:600; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .kpi b { display:block; font-size:28px; line-height:1.1; }
+  .kpi span { color:var(--muted); font-size:13px; }
+  .bars { display:flex; align-items:flex-end; gap:3px; height:110px; }
+  .bars div { flex:1; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; position:relative; }
+  .bars.h div { background:var(--accent2); }
+  .axis { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:4px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
+  th, td { padding:6px 4px; text-align:right; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .scroll { overflow-x:auto; }
+  .cats span { display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px 10px; margin:0 6px 6px 0; }
+  #err { color:#c0392b; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Статистика трекера</h1>
+  <div class="sub" id="upd">Загрузка…</div>
+  <div id="err" hidden></div>
+  <form id="gate" class="card" hidden>
+    <h2>Введите пароль</h2>
+    <input id="pw" type="password" inputmode="numeric" autocomplete="current-password" style="width:100%;font-size:18px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text)">
+    <button style="margin-top:10px;width:100%;font-size:16px;padding:10px;border:0;border-radius:8px;background:var(--accent);color:#fff">Открыть</button>
+  </form>
+
+  <div class="grid" id="kpi"></div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>Нажатий «Посчитать» по дням</h2>
+    <div class="bars" id="chart"></div>
+    <div class="axis"><span id="ax1"></span><span id="ax2"></span></div>
+  </div>
+
+  <div class="card">
+    <h2>По дням (время UTC)</h2>
+    <div class="scroll"><table id="tbl"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Во сколько нажимают (по Москве)</h2>
+    <div class="bars h" id="hours"></div>
+    <div class="axis"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Категории броней</h2>
+    <div class="cats" id="cats"></div>
+  </div>
+
+  <div class="sub">«Уник.» — устройства, нажавшие в этот день впервые; «Новых» — нажавшие впервые вообще. Это устройства, а не люди: очистка браузера или второй телефон дают нового.</div>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = new Intl.NumberFormat("ru-RU");
+  var fmtDay = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
+  function sum(a, k) { return a.reduce(function (s, x) { return s + x[k]; }, 0); }
+  function dayLabel(d) { return fmtDay.format(new Date(d + "T00:00:00Z")); }
+
+  function render(s) {
+    var days = s.days.slice().sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+    var today = new Date().toISOString().slice(0, 10);
+    var t = days.filter(function (x) { return x.d === today; })[0] || { open: 0, hit: 0, uniq: 0, new: 0 };
+    var hits = sum(days, "hit"), opens = sum(days, "open");
+    var kpis = [
+      [fmt.format(t.hit), "нажатий сегодня"],
+      [fmt.format(t.uniq), "уникальных сегодня"],
+      [fmt.format(hits + s.old_clicks), "нажатий всего" + (s.old_clicks ? " (с учётом " + fmt.format(s.old_clicks) + " до подробной статистики)" : "")],
+      [fmt.format(sum(days, "new")), "новых устройств с начала подробной статистики"],
+      [fmt.format(opens), "открытий страницы"],
+      [opens ? Math.round(100 * hits / opens) + "%" : "—", "нажатий на открытие"]
+    ];
+    $("kpi").innerHTML = kpis.map(function (k) { return '<div class="card kpi"><b>' + k[0] + "</b><span>" + k[1] + "</span></div>"; }).join("");
+
+    var last = days.slice(-14), max = Math.max.apply(null, last.map(function (x) { return x.hit; }).concat([1]));
+    $("chart").innerHTML = last.map(function (x) { return '<div title="' + dayLabel(x.d) + ": " + x.hit + '" style="height:' + Math.max(2, 100 * x.hit / max) + '%"></div>'; }).join("");
+    if (last.length) { $("ax1").textContent = dayLabel(last[0].d); $("ax2").textContent = dayLabel(last[last.length - 1].d); }
+
+    $("tbl").innerHTML = "<tr><th>День</th><th>Откр.</th><th>Нажатий</th><th>Уник.</th><th>Новых</th><th>По ссыл.</th><th>Копий</th></tr>" +
+      days.slice().reverse().slice(0, 30).map(function (x) {
+        return "<tr><td>" + dayLabel(x.d) + "</td><td>" + x.open + "</td><td>" + x.hit + "</td><td>" + x.uniq + "</td><td>" + x.new + "</td><td>" + x.link + "</td><td>" + x.share + "</td></tr>";
+      }).join("");
+
+    var mskH = new Array(24).fill(0);
+    s.hours.forEach(function (n, h) { mskH[(h + 3) % 24] += n; });
+    var hm = Math.max.apply(null, mskH.concat([1]));
+    $("hours").innerHTML = mskH.map(function (n, h) { return '<div title="' + h + ":00 — " + n + '" style="height:' + Math.max(2, 100 * n / hm) + '%"></div>'; }).join("");
+
+    var cats = Object.keys(s.cats).sort(function (a, b) { return s.cats[b] - s.cats[a]; });
+    $("cats").innerHTML = cats.length ? cats.map(function (c) { return "<span>" + c + ": <b>" + s.cats[c] + "</b></span>"; }).join("") : "пока нет данных";
+
+    var ago = Math.max(0, Math.round((Date.now() - Date.parse(s.updated)) / 60000));
+    $("upd").textContent = "Обновлено " + ago + " мин назад · данные пересчитываются раз в 5 минут";
+  }
+
+  var KEY = "q05-stats-key";
+  function getKey() { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } }
+  function setKey(v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
+  function clearKey() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+  function showGate(msg) {
+    $("gate").hidden = false;
+    $("upd").textContent = "";
+    $("err").textContent = msg || "";
+    $("err").hidden = !msg;
+    ["kpi", "chart", "tbl", "hours", "cats"].forEach(function (id) { $(id).innerHTML = ""; });
+  }
+
+  function load() {
+    var key = getKey();
+    if (!key) { showGate(); return; }
+    fetch("stats.json?_=" + Date.now(), { cache: "no-store", headers: { "X-Key": key } })
+      .then(function (r) {
+        if (r.status === 401) { clearKey(); showGate("Неверный пароль."); return null; }
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      })
+      .then(function (s) { if (!s) return; $("gate").hidden = true; $("err").hidden = true; render(s); })
+      .catch(function (e) { $("err").textContent = "Не удалось загрузить статистику (" + e.message + ")."; $("err").hidden = false; $("upd").textContent = ""; });
+  }
+  $("gate").addEventListener("submit", function (e) {
+    e.preventDefault();
+    setKey($("pw").value.trim());
+    $("pw").value = "";
+    load();
+  });
+  load();
+  setInterval(function () { if (getKey()) load(); }, 60000);
+})();
+</script>
+</body>
+</html>
