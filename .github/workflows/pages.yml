@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -26,5 +27,25 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
+      # Артефакт иногда ещё не виден API сразу после загрузки — deploy-pages
+      # падает с «Found 0 artifact(s)». Ждём, пока он появится в списке.
+      - name: Wait for pages artifact
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = "github-pages";
+            for (let i = 0; i < 30; i++) {
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+              });
+              if (data.artifacts.some((a) => a.name === name)) {
+                core.info(`Artifact ${name} is available`);
+                return;
+              }
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+            core.setFailed(`Artifact ${name} did not appear within 60 s`);
       - id: deployment
         uses: actions/deploy-pages@v4

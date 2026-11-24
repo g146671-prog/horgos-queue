@@ -3,6 +3,9 @@ data/history.json
 data/stats.json
 data/stats.json.tmp
 logs/
+history.json
+*.bak
+*.bak-*
 
 # Данные скрейпера (обновляются скриптом автоматически)
 # data/data.json — НЕ игнорируем: он должен быть в репо для GitHub Pages
