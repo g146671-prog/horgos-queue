@@ -33,15 +33,18 @@ PUBLIC = os.path.join(DATA_DIR, "data.json")
 TIME_RE = re.compile(r'id="board-time">\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s*<')
 TILE_RE = re.compile(
     r'<div class="tn">(?P<name>.*?)</div>\s*'
-    r'<div class="tnum" id="num-(?P<prefix>[A-Z]{3})">(?P<num>[A-Z]{3}\d+)</div>\s*'
-    r'<div class="trange"[^>]*>(?P<left>[A-Z]{3}\d+)\s*[—-]\s*(?P<right>[A-Z]{3}\d+)</div>\s*'
+    r'<div class="tnum" id="num-(?P<prefix>[A-Z]{3})">(?P<num>[^<]*)</div>\s*'
+    r'<div class="trange"[^>]*>(?P<left>[^<]*?)\s*[—-]\s*(?P<right>[^<]*?)</div>\s*'
     r'<div class="tstats">\s*'
-    r'<div>[^<]*<b>(?P<today>\d+)</b></div>\s*'
-    r'<div>[^<]*<b>(?P<yday>\d+)</b></div>\s*'
-    r'<div>[^<]*<b>(?P<dbyday>\d+)</b></div>',
+    r'<div>[^<]*<b>(?P<today>[^<]*)</b></div>\s*'
+    r'<div>[^<]*<b>(?P<yday>[^<]*)</b></div>\s*'
+    r'<div>[^<]*<b>(?P<dbyday>[^<]*)</b></div>',
     re.S,
 )
 NAME_TAIL_RE = re.compile(r"\s*\([A-Z]{3}\)\s*$")
+# Сайт иногда подмешивает к числам свою строку "xorgos.com" (защита от скрейпинга),
+# а иногда заменяет ею число целиком. Первое снимаем, второе считаем неполными данными.
+MARK_RE = re.compile(r"xorgos\.com", re.I)
 
 
 def log(msg):
@@ -57,7 +60,15 @@ def fetch(url):
 
 
 def digits(code):
-    return int(re.sub(r"\D", "", code))
+    s = MARK_RE.sub("", html.unescape(code or ""))
+    s = re.sub(r"\D", "", s)
+    return int(s) if s else None
+
+
+def count(raw):
+    s = MARK_RE.sub("", html.unescape(raw or ""))
+    m = re.search(r"\d+", s)
+    return int(m.group()) if m else None
 
 
 def parse(page):
@@ -66,20 +77,27 @@ def parse(page):
         raise ValueError("не найдено время табло (board-time) — сайт поменял разметку?")
     board_time = m.group(1)
     types = {}
+    incomplete = 0
     for t in TILE_RE.finditer(page):
         p = t.group("prefix")
-        types[p] = {
-            "name": NAME_TAIL_RE.sub("", html.unescape(t.group("name")).strip()),
+        vals = {
             "current": digits(t.group("num")),
             "left": digits(t.group("left")),
             "right": digits(t.group("right")),
-            "today": int(t.group("today")),
-            "yesterday": int(t.group("yday")),
-            "day_before": int(t.group("dbyday")),
+            "today": count(t.group("today")),
+            "yesterday": count(t.group("yday")),
+            "day_before": count(t.group("dbyday")),
+        }
+        if any(v is None for v in vals.values()):
+            incomplete += 1
+            continue
+        types[p] = {
+            "name": NAME_TAIL_RE.sub("", html.unescape(t.group("name")).strip()),
+            **vals,
         }
     if not types:
-        raise ValueError("не найдено ни одной плитки категорий — сайт поменял разметку?")
-    return board_time, types
+        raise ValueError("не найдено ни одной полной плитки категорий — сайт поменял разметку?")
+    return board_time, types, incomplete
 
 
 def load_json(path, default):
@@ -145,13 +163,45 @@ def seed(history):
             dst.setdefault(d, n)
 
 
+ATTEMPTS = 5
+
+
+def read_board():
+    """Читает табло, повторяя попытку, если сайт подменил числа защитной строкой."""
+    best = None
+    last_error = None
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            page = fetch(SOURCE_URL)
+            board_time, types, incomplete = parse(page)
+        except Exception as e:
+            last_error = e
+            log(f"попытка {attempt}/{ATTEMPTS}: {e}")
+        else:
+            if not incomplete:
+                return board_time, types, 0
+            last_error = f"неполные данные ({incomplete} плиток)"
+            log(f"попытка {attempt}/{ATTEMPTS}: {last_error}")
+            if best is None or len(types) > len(best[1]):
+                best = (board_time, types, incomplete)
+        if attempt < ATTEMPTS:
+            time.sleep(3 * attempt)
+    if best is not None:
+        return best
+    raise RuntimeError(f"табло не отдало данные за {ATTEMPTS} попыток: {last_error}")
+
+
 def run_once():
     history = load_json(HISTORY, {})
     if not history.get("seeded"):
         seed(history)
         history["seeded"] = True
-    page = fetch(SOURCE_URL)
-    board_time, types = parse(page)
+    board_time, types, incomplete = read_board()
+    if incomplete:
+        # Неполные плитки не публикуем: берём прошлые значения, чтобы категория не пропала.
+        for p, t in history.get("last", {}).get("types", {}).items():
+            types.setdefault(p, t)
+        log(f"внимание: {incomplete} плиток пришли неполными, взяты прошлые значения")
     fetched = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     update(history, board_time, types, fetched)
     write_atomic(HISTORY, history)
