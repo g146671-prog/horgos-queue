@@ -115,15 +115,59 @@ crontab -e
 Строка cron для пересборки статистики:
 
 ```
-*/5 * * * * Q05_STATS_DIR=/opt/q05-stats /opt/q05-tracker/gen-stats.sh >> /opt/q05-stats/logs/gen.log 2>&1
+*/5 * * * * Q05_STATS_DIR=/opt/q05-stats sh /opt/q05-tracker/gen-stats.sh >> /opt/q05-stats/logs/gen.log 2>&1
 ```
+
+На VPS (точка входа):
+
+1. Ключу туннеля нужно разрешить слушать ещё один порт. В
+   `/home/tunnel/.ssh/authorized_keys` в опциях ключа добавьте
+   `permitlisten="127.0.0.1:8091"` рядом с уже разрешёнными 2222 и 8080:
+
+   ```
+   restrict,port-forwarding,permitopen="127.0.0.1:1",
+   permitlisten="127.0.0.1:2222",permitlisten="127.0.0.1:8080",
+   permitlisten="127.0.0.1:8091" ssh-ed25519 AAAA... personalserver-tunnel
+   ```
+
+   Без этого `q05-stats-tunnel` падает с `remote port forwarding failed for
+   listen port 8091`.
+
+2. В `/opt/familychat-entry/Caddyfile` блок сайта должен выглядеть так:
+
+   ```
+   horgos-queue.pogovorim-chat.ru {
+       encode zstd gzip
+       header Strict-Transport-Security "max-age=31536000"
+
+       handle /collect/* {
+           uri strip_prefix /collect
+           reverse_proxy 127.0.0.1:8091
+       }
+       handle /stats/* {
+           reverse_proxy 127.0.0.1:8091
+       }
+       handle {
+           reverse_proxy 127.0.0.1:8090
+       }
+   }
+   ```
+
+   Применить: `docker exec fc-caddy caddy validate --config /etc/caddy/Caddyfile`
+   и затем `docker exec fc-caddy caddy reload --config /etc/caddy/Caddyfile`.
 
 Проверка:
 
 ```bash
 ssh beelink "curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8091/open?h=1'; tail -3 /opt/q05-stats/logs/events.log"
+ssh nl-vps "curl -s -o /dev/null -w '%{http_code}\n' 'https://horgos-queue.pogovorim-chat.ru/collect/open?h=1'"
 ssh nl-vps "curl -s -o /dev/null -w '%{http_code}\n' https://horgos-queue.pogovorim-chat.ru/stats/"
 ```
+
+`/collect/...` должен отвечать 204, `/stats/` — 200, `/stats/stats.json` без
+заголовка `X-Key` — 401. Новое событие появляется в `events.log` сразу,
+`stats.json` пересобирается cron раз в 5 минут (или вручную:
+`Q05_STATS_DIR=/opt/q05-stats sh /opt/q05-tracker/gen-stats.sh`).
 
 События не содержат IP, User-Agent и номера брони — только тип, флаги и категорию.
 
