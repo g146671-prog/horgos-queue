@@ -1,0 +1,21 @@
+[Unit]
+Description=Q05 tracker anonymous stats collector
+After=network.target
+
+[Service]
+Type=simple
+User=anton
+Group=anton
+WorkingDirectory=/opt/q05-stats
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/q05-stats/collector.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/q05-stats/logs /opt/q05-stats/data
+
+[Install]
+WantedBy=multi-user.target

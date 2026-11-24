@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://gc.zgo.at; style-src 'unsafe-inline'; img-src 'self' data: https://gc.zgo.at; connect-src 'self' https://*.goatcounter.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://horgos-queue.pogovorim-chat.ru; base-uri 'none'; form-action 'none'">
 <title>Очередь на выезд из Хоргоса — прогноз</title>
 <style>
   :root {
@@ -133,13 +133,16 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
-  // Анонимная статистика через GoatCounter (без cookies, без персональных данных).
-  // Уникальность определяется здесь, в браузере.
-  var cameByLink = location.hash.length > 1;
-  function gcEvent(name) {
-    if (window.goatcounter && goatcounter.count) {
-      try { goatcounter.count({ path: name, event: true }); } catch (e) {}
-    }
+  // Анонимная статистика: уходят только тип события и флаги, без номера брони и без ID.
+  // Уникальность определяется здесь, в браузере: «первый раз на устройстве» и «первый раз сегодня».
+  var STATS_URL = "https://horgos-queue.pogovorim-chat.ru/collect";
+  var cameByLink = location.hash.length > 1;   // до того, как remember() запишет номер в адрес
+  function ping(path, params) {
+    var qs = "_=" + Date.now();
+    for (var k in params) if (params[k]) qs += "&" + k + "=" + encodeURIComponent(params[k]);
+    try {
+      fetch(STATS_URL + "/" + path + "?" + qs, { mode: "no-cors", cache: "no-store", keepalive: true }).catch(function () {});
+    } catch (e) {}
   }
   function once(storage, key, value) {
     try {
@@ -302,12 +305,17 @@
     }
     $("num").value = q.prefix + String(q.n).padStart(6, "0");
     remember(q.code);
-    gcEvent("hit-" + q.prefix);
+    var today = new Date().toISOString().slice(0, 10);
+    ping("hit", {
+      n: once(localStorage, "q05-seen", "1") ? "1" : "",
+      d: once(localStorage, "q05-day", today) ? "1" : "",
+      p: q.prefix
+    });
     if (data) show(q);
   });
 
   $("share").addEventListener("click", function () {
-    gcEvent("share");
+    ping("share", {});
     var url = location.href;
     var done = function () { $("share").textContent = "Ссылка скопирована"; setTimeout(function () { $("share").textContent = "Скопировать ссылку на мой прогноз"; }, 2000); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { prompt("Скопируйте ссылку:", url); });
@@ -328,14 +336,10 @@
       $("board-time").textContent = "Не удалось загрузить данные. Обновите страницу чуть позже.";
     });
   }
-  if (!window.DEMO_DATA && once(sessionStorage, "q05-open", "1")) gcEvent(cameByLink ? "open-link" : "open");
+  if (!window.DEMO_DATA && once(sessionStorage, "q05-open", "1")) ping("open", { h: cameByLink ? "1" : "" });
   load();
   setInterval(function () { if (!window.DEMO_DATA && document.visibilityState === "visible") load(); }, 5 * 60000);
 })();
 </script>
-<!-- GoatCounter: бесплатная анонимная аналитика без cookies.
-     Замените YOURCODE на ваш код из goatcounter.com -->
-<script data-goatcounter="https://YOURCODE.goatcounter.com/count"
-        async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>

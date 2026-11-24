@@ -1,0 +1,23 @@
+[Unit]
+Description=Q05 stats tunnel to entry point
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Только этот порт; управляющий туннель pogovorim-nl.service не трогаем.
+ExecStart=/usr/bin/ssh -N -T \
+    -o BatchMode=yes \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=20 \
+    -o ServerAliveCountMax=3 \
+    -o StrictHostKeyChecking=accept-new \
+    -i /root/.ssh/pogovorim-tunnel \
+    -R 127.0.0.1:8091:127.0.0.1:8091 \
+    tunnel@78.17.37.158
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

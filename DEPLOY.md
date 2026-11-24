@@ -7,6 +7,7 @@ GitHub (main)
   web/                 страница и данные, отсюда собирается GitHub Pages
   .github/workflows/   деплой web/ на Pages при каждом изменении web/**
   scraper/             сборщик табло xorgos.com (Python, только stdlib)
+  collector/           приёмник статистики и systemd-юниты (Beelink)
   scrape-and-push.sh   запуск сборщика + коммит data.json на Beelink
 ```
 
@@ -19,6 +20,8 @@ GitHub (main)
 3. GitHub Actions по изменению `web/**` публикует каталог `web/` на GitHub Pages.
 4. Страница сама раз в 5 минут перечитывает `data/data.json`; номер брони
    считается только в браузере и на сервер не уходит.
+5. Анонимные события (`/open`, `/hit`, `/share`) страница отправляет на приёмник
+   статистики на Beelink; подробности — в разделе «Статистика посещений».
 
 Проверить, что цепочка жива:
 
@@ -61,6 +64,68 @@ Git в клоне должен быть настроен на коммиты (`u
   достаточно перезапустить упавший job (Actions → Re-run failed jobs).
 - Свежесть данных проверяется по `fetched_utc` в `data/data.json`. Pages кэширует
   файл на 10 минут, поэтому сразу после пуша он может быть ещё старым.
+
+## Статистика посещений
+
+Считаются те же метрики, что были на старом сайте: открытия, нажатия «Посчитать»,
+уникальные за день, новые устройства, переходы по ссылке, копирования ссылки,
+категории и часы по Москве. Учитываются только посещения github.io; старый сайт
+в эти цифры не попадает.
+
+GitHub Pages статический, поэтому события принимает маленький сервис на Beelink:
+
+```
+web/index.html  --fetch no-cors-->  https://horgos-queue.pogovorim-chat.ru/collect/...
+                                              |
+                                     Caddy на VPS (TLS)
+                                              |
+                                     SSH-туннель 127.0.0.1:8091
+                                              |
+                               /opt/q05-stats/collector.py (Beelink)
+                                              |
+                               logs/events.log -> gen-stats.sh -> data/stats.json
+```
+
+- Приёмник: `/opt/q05-stats/collector.py`, systemd `q05-stats.service`, слушает
+  только `127.0.0.1:8091`.
+- Туннель: `q05-stats-tunnel.service` на Beelink, отдельно от управляющего
+  `pogovorim-nl.service` — его не трогаем.
+- Caddy на VPS: `/collect/*` и `/stats/*` идут на `127.0.0.1:8091`, остальное —
+  на старую страницу. Блок в `/opt/familychat-entry/Caddyfile`.
+- Страница статистики: `https://horgos-queue.pogovorim-chat.ru/stats/`, ключ —
+  тот же, что был на старом сайте (`/opt/q05-stats/stats-key.conf`).
+- `gen-stats.sh` пересобирает `data/stats.json` каждые 5 минут.
+
+Установка на Beelink:
+
+```bash
+sudo mkdir -p /opt/q05-stats/logs /opt/q05-stats/data
+sudo chown -R anton:anton /opt/q05-stats
+cp /opt/q05-tracker/collector/collector.py /opt/q05-stats/
+# ключ берём со старого VPS:
+scp nl-vps:/opt/q05-tracker/stats-key.conf /opt/q05-stats/stats-key.conf
+chmod 600 /opt/q05-stats/stats-key.conf
+sudo cp /opt/q05-tracker/collector/q05-stats.service \
+        /opt/q05-tracker/collector/q05-stats-tunnel.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now q05-stats q05-stats-tunnel
+crontab -e
+```
+
+Строка cron для пересборки статистики:
+
+```
+*/5 * * * * Q05_STATS_DIR=/opt/q05-stats /opt/q05-tracker/gen-stats.sh >> /opt/q05-stats/logs/gen.log 2>&1
+```
+
+Проверка:
+
+```bash
+ssh beelink "curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8091/open?h=1'; tail -3 /opt/q05-stats/logs/events.log"
+ssh nl-vps "curl -s -o /dev/null -w '%{http_code}\n' https://horgos-queue.pogovorim-chat.ru/stats/"
+```
+
+События не содержат IP, User-Agent и номера брони — только тип, флаги и категорию.
 
 ## Старый VPS
 
