@@ -20,7 +20,7 @@ BASE = Path(os.environ.get("Q05_STATS_DIR", "/opt/q05-stats"))
 LOG = BASE / "logs" / "events.log"
 STATS = BASE / "data" / "stats.json"
 KEY_FILE = BASE / "stats-key.conf"
-PAGE = Path(os.environ.get("Q05_STATS_PAGE", "/opt/q05-tracker/web/stats/index.html"))
+PAGE = Path(os.environ.get("Q05_STATS_PAGE", str(BASE / "stats" / "index.html")))
 HOST = os.environ.get("Q05_STATS_HOST", "127.0.0.1")
 PORT = int(os.environ.get("Q05_STATS_PORT", "8091"))
 

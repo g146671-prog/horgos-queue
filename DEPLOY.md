@@ -7,7 +7,7 @@ GitHub (main)
   web/                 страница и данные, отсюда собирается GitHub Pages
   .github/workflows/   деплой web/ на Pages при каждом изменении web/**
   scraper/             сборщик табло xorgos.com (Python, только stdlib)
-  collector/           приёмник статистики и systemd-юниты (Beelink)
+  collector/           приёмник статистики, страница /stats/ и systemd-юниты (Beelink)
   scrape-and-push.sh   запуск сборщика + коммит data.json на Beelink
 ```
 
@@ -99,9 +99,10 @@ web/index.html  --fetch no-cors-->  https://horgos-queue.pogovorim-chat.ru/colle
 Установка на Beelink:
 
 ```bash
-sudo mkdir -p /opt/q05-stats/logs /opt/q05-stats/data
+sudo mkdir -p /opt/q05-stats/logs /opt/q05-stats/data /opt/q05-stats/stats
 sudo chown -R anton:anton /opt/q05-stats
 cp /opt/q05-tracker/collector/collector.py /opt/q05-stats/
+cp /opt/q05-tracker/collector/stats/index.html /opt/q05-stats/stats/
 # ключ берём со старого VPS:
 scp nl-vps:/opt/q05-tracker/stats-key.conf /opt/q05-stats/stats-key.conf
 chmod 600 /opt/q05-stats/stats-key.conf
@@ -111,6 +112,11 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now q05-stats q05-stats-tunnel
 crontab -e
 ```
+
+Приёмник отдаёт страницу `/stats/` из `/opt/q05-stats/stats/index.html`
+(её копию из `collector/stats/`). На GitHub Pages по адресу
+`https://g146671-prog.github.io/horgos-queue/stats/` лежит только
+перенаправление на рабочую страницу.
 
 Строка cron для пересборки статистики:
 
