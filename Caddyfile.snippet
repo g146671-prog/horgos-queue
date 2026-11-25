@@ -1,0 +1,23 @@
+# --- Трекер очереди Хоргоса ---
+# Старая страница на VPS + приёмник статистики нового сайта (Beelink через SSH-туннель).
+# Вставляется в /opt/familychat-entry/Caddyfile; после правки:
+#   docker exec fc-caddy caddy validate --config /etc/caddy/Caddyfile
+#   docker exec fc-caddy caddy reload  --config /etc/caddy/Caddyfile
+horgos-queue.pogovorim-chat.ru {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+
+	# /collect/* — приём событий статистики (страница github.io шлёт сюда).
+	handle /collect/* {
+		uri strip_prefix /collect
+		reverse_proxy 127.0.0.1:8091
+	}
+	# /stats/* — страница статистики и stats.json (закрыт заголовком X-Key).
+	handle /stats/* {
+		reverse_proxy 127.0.0.1:8091
+	}
+	# Всё остальное — старая страница в Docker.
+	handle {
+		reverse_proxy 127.0.0.1:8090
+	}
+}

@@ -161,6 +161,7 @@ crontab -e
 
    Применить: `docker exec fc-caddy caddy validate --config /etc/caddy/Caddyfile`
    и затем `docker exec fc-caddy caddy reload --config /etc/caddy/Caddyfile`.
+   Готовый фрагмент лежит в репозитории: `Caddyfile.snippet`.
 
 Проверка:
 
