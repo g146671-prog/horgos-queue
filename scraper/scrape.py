@@ -231,7 +231,10 @@ def run_once():
         types["ZLA"]["current"] = official
         types["ZLA"]["official"] = True
         if before != official:
-            log(f"ZLA официально: {before} -> {official} (xorgos был неточен)")
+            log(f"ZLA официально: {before} -> {official}")
+        if before - official > 2:
+            # Официальный сборщик мог упереться в пропуск номеров — стоит проверить.
+            log(f"внимание: официальный ZLA {official} отстаёт от xorgos {before}")
     fetched = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     update(history, board_time, types, fetched)
     write_atomic(HISTORY, history)
