@@ -26,6 +26,10 @@ INTERVAL = int(os.environ.get("INTERVAL", "900"))  # 15 минут
 USER_AGENT = os.environ.get("USER_AGENT", "q05-tracker/1.0 (community queue forecast)")
 KEEP_DAYS = 60          # сколько суток истории держать
 KEEP_SNAPSHOTS = 400    # сколько последних снимков держать (~4 суток при 15 мин)
+# Официальный ZLA (horgoseport.com) собирается отдельно, браузером; здесь только
+# подхватываем его снимок и подменяем номер, остальные поля остаются с xorgos.
+OFFICIAL_ZLA = os.environ.get("OFFICIAL_ZLA_FILE", "")
+OFFICIAL_MAX_AGE = 60 * 60  # снимок старше часа не используем
 
 HISTORY = os.path.join(DATA_DIR, "history.json")
 PUBLIC = os.path.join(DATA_DIR, "data.json")
@@ -155,6 +159,25 @@ def public_view(history):
     return out
 
 
+def official_zla():
+    """Последний прошедший ZLA с официального портала, если снимок свежий."""
+    if not OFFICIAL_ZLA:
+        return None
+    try:
+        with open(OFFICIAL_ZLA, encoding="utf-8") as f:
+            snap = json.load(f)
+        ts = dt.datetime.strptime(snap["fetched_utc"], "%Y-%m-%dT%H:%M:%SZ")
+        ts = ts.replace(tzinfo=dt.timezone.utc)
+        age = (dt.datetime.now(dt.timezone.utc) - ts).total_seconds()
+        if age > OFFICIAL_MAX_AGE:
+            log(f"официальный ZLA устарел ({age / 60:.0f} мин), берём xorgos")
+            return None
+        return int(snap["last_passed"])
+    except Exception as e:
+        log(f"официальный ZLA недоступен ({e}), берём xorgos")
+        return None
+
+
 def seed(history):
     s = load_json(SEED_FILE, {})
     for p, row in s.get("daily", {}).items():
@@ -202,6 +225,13 @@ def run_once():
         for p, t in history.get("last", {}).get("types", {}).items():
             types.setdefault(p, t)
         log(f"внимание: {incomplete} плиток пришли неполными, взяты прошлые значения")
+    official = official_zla()
+    if official is not None and "ZLA" in types:
+        before = types["ZLA"]["current"]
+        types["ZLA"]["current"] = official
+        types["ZLA"]["official"] = True
+        if before != official:
+            log(f"ZLA официально: {before} -> {official} (xorgos был неточен)")
     fetched = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     update(history, board_time, types, fetched)
     write_atomic(HISTORY, history)

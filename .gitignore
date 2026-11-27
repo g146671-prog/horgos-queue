@@ -13,3 +13,10 @@ history.json
 # Конфиг ключей (не в репо)
 nginx/stats-key.conf
 stats-key.conf
+
+# Локальные заметки и доступы (не в репо)
+.local/
+
+# Состояние официального сборщика ZLA — только на Beelink
+data/official-zla.json
+data/official-zla-state.json
