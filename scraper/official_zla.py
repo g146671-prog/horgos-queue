@@ -4,7 +4,9 @@
 
 Страница «重车预约查询» (#/public/zcyy) умеет искать только по конкретному
 номеру брони, списков нет. Поэтому храним последний подтверждённый прошедший
-номер и каждый запуск проверяем следующие за ним, пока не упрёмся в очередь.
+номер и каждый запуск проверяем небольшое окно номеров за ним, беря максимум
+из 已放行. Окно нужно потому, что машины проходят не строго по порядку:
+вызванные, но не погруженные номера могут стоять перед уже прошедшим.
 
 Запускается из scrape-and-push.sh до сбора xorgos. Пишет два файла:
   --state  состояние (последний прошедший номер, журнал проверок);
@@ -29,10 +31,9 @@ PAGE_URL = "https://www.horgoseport.com/#/public/zcyy"
 API_MARK = "getHeavyResById"
 
 DELAY = 6.0             # портал не принимает два запроса чаще, чем раз в 5 с
-MAX_CHECKS = 12         # сколько номеров проверять за цикл
+WINDOW = 6              # сколько номеров впереди проверять за цикл
+MAX_CHECKS = 12         # жёсткий предел запросов за цикл (догон после простоя)
 MAX_SPAN = 40           # насколько далеко вперёд уходить от старого значения
-STOP_QUEUE = 3          # столько подряд «в очереди» — значит фронт найден
-STOP_GAPS = 5           # столько подряд пропусков/отказов — тоже хватит
 BOOTSTRAP_BACK = 25     # на сколько шагов назад искать при первом запуске
 
 PASSED = "已放行"
@@ -213,24 +214,21 @@ def main():
             last = bootstrap(portal, hint)
             time.sleep(a.delay)  # последний запрос bootstrap тоже считается лимитом
 
-        pos = last + 1
-        queue_hits = gaps = 0
-        while checks < a.max_checks and pos <= last + a.max_span:
+        start = last
+        pos = start + 1
+        limit = start + WINDOW
+        while checks < a.max_checks and pos <= limit and pos <= start + a.max_span:
             st = portal.query(pos)
             checks += 1
             results[pos] = st
             log(f"{code(pos)}: {st}")
             if st == PASSED:
                 last = pos
-                queue_hits = gaps = 0
-            elif st in QUEUE:
-                queue_hits += 1
-            else:
-                gaps += 1
-            if queue_hits >= STOP_QUEUE or gaps >= STOP_GAPS:
-                break
+                # Держим окно впереди найденного прошедшего: так догоняем,
+                # если сборщик пропустил несколько циклов.
+                limit = max(limit, pos + WINDOW)
             pos += 1
-            if checks < a.max_checks:
+            if checks < a.max_checks and pos <= limit:
                 time.sleep(a.delay)
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
