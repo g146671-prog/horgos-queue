@@ -275,8 +275,13 @@
     }
 
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 25000);
-    var done = function () { clearTimeout(timer); };
+    // Если таможня молчит, через 7 секунд показываем оценку по номерам,
+    // но точный ответ всё ещё может её заменить.
+    var slow = setTimeout(function () {
+      if (seq === showSeq) fallbackAhead(q, t);
+    }, 7000);
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 20000);
+    var done = function () { clearTimeout(timer); clearTimeout(slow); };
     fetch(QUEUE_URL + "?num=" + encodeURIComponent(q.code),
           { signal: ctrl ? ctrl.signal : undefined, cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })

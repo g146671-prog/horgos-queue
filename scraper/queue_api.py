@@ -180,6 +180,8 @@ def worker():
             box["result"] = {"error": "captcha", "retry_after": 300}
         except Exception as e:
             log(f"queue {mask(num)}: ошибка {str(e)[:200]}")
+            portal = close_portal(portal)
+            STATE["browser"] = False
             box["result"] = {"error": "portal", "detail": str(e)[:200]}
         finally:
             box["event"].set()
