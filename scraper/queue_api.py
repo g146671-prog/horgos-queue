@@ -38,7 +38,7 @@ PROFILE = os.environ.get("Q05_QUEUE_PROFILE", "/opt/q05-official/profile-api")
 
 CACHE_TTL = 600          # 10 минут
 CACHE_MAX = 500
-MAX_WAIT = 30            # сколько HTTP-запрос ждёт результат
+MAX_WAIT = 45            # сколько HTTP-запрос ждёт результат
 MAX_PENDING = 4          # больше в очередь не берём
 MIN_GAP = 6.0            # портал: не чаще раза в 5 с
 PER_IP_GAP = 10          # один посетитель — не чаще раза в 10 с
@@ -100,6 +100,13 @@ def worker():
     portal = None
     last_query = 0.0
     retry_at = 0.0
+    # Прогрев сразу при старте: иначе первый посетитель ждёт запуск Chromium.
+    try:
+        portal = open_portal()
+        log("queue: браузер прогрет")
+    except Exception as e:
+        log(f"queue: прогрев не удался: {str(e)[:160]}")
+        retry_at = time.time() + 60
     while True:
         try:
             num, box = JOBS.get(timeout=30)
