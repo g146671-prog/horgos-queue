@@ -11,6 +11,8 @@
 import os
 import re
 import threading
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +25,7 @@ KEY_FILE = BASE / "stats-key.conf"
 PAGE = Path(os.environ.get("Q05_STATS_PAGE", str(BASE / "stats" / "index.html")))
 HOST = os.environ.get("Q05_STATS_HOST", "127.0.0.1")
 PORT = int(os.environ.get("Q05_STATS_PORT", "8091"))
+QUEUE_API = os.environ.get("Q05_QUEUE_API", "http://127.0.0.1:8092/queue")
 
 PREFIX_RE = re.compile(r"^[A-Z]{3}$")
 LOCK = threading.Lock()
@@ -80,6 +83,38 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
 
+    def do_OPTIONS(self):
+        self.send_headers(204, extra={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "600",
+        })
+
+    def proxy_queue(self, u):
+        """Проксирует /queue в сервис очереди ZLA на 8092.
+
+        Нужен, чтобы фича работала через уже существующий маршрут /collect/*
+        на VPS: отдельный туннель и правка Caddy не требуются.
+        Номер брони не логируется.
+        """
+        url = QUEUE_API + (("?" + u.query) if u.query else "")
+        try:
+            with urllib.request.urlopen(url, timeout=50) as r:
+                code = r.status
+                ctype = r.headers.get("Content-Type", "application/json; charset=utf-8")
+                body = r.read()
+        except urllib.error.HTTPError as e:
+            code = e.code
+            ctype = e.headers.get("Content-Type", "application/json; charset=utf-8")
+            body = e.read()
+        except Exception:
+            code = 502
+            ctype = "application/json; charset=utf-8"
+            body = b'{"error":"queue_unavailable"}'
+        self.send_headers(code, ctype, extra={"Access-Control-Allow-Origin": "*"})
+        self.wfile.write(body)
+
     def do_GET(self):
         u = urlparse(self.path)
         path = u.path
@@ -87,6 +122,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/open", "/hit", "/share"):
             log_event(path, parse_qs(u.query))
             self.send_headers(204, extra={"Access-Control-Allow-Origin": "*"})
+            return
+
+        if path in ("/queue", "/queue/"):
+            self.proxy_queue(u)
             return
 
         if path in ("/stats", "/stats/"):

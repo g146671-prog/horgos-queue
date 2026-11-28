@@ -227,7 +227,9 @@
 
   // Точное место в очереди ZLA: страница спрашивает сервис на Beelink,
   // который открывает официальный портал таможни в headless-браузере.
-  var QUEUE_URL = "https://horgos-queue.pogovorim-chat.ru/queue";
+  // Идём через /collect/queue: этот путь уже проксируется Caddy на VPS
+  // в приёмник статистики, а тот пересылает запрос в очередь на 8092.
+  var QUEUE_URL = "https://horgos-queue.pogovorim-chat.ru/collect/queue";
 
   function fallbackAhead(q, t) {
     renderForecast(q, t, q.n - t.current, "оценка по номерам: таможня не ответила");
