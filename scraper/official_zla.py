@@ -96,7 +96,14 @@ class Portal:
         self.page.set_default_timeout(60000)
         self.page.goto(PAGE_URL, wait_until="domcontentloaded", timeout=90000)
         self.page.wait_for_selector("input", timeout=90000)
-        self.page.wait_for_timeout(3000)
+        # Виджет капчи появляется в DOM не сразу (иногда через 10–15 с). Пока его
+        # нет, клик «查询» вообще не отправляет запрос. Ждём именно attached:
+        # iframe специально висит за экраном на -9999,-9999 и не является visible.
+        try:
+            self.page.wait_for_selector("iframe[src*='tcaptcha']", state="attached", timeout=20000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(1000)
         self.input = self.page.locator("input").first
         return self
 
@@ -119,8 +126,12 @@ class Portal:
             return False
         return any(x >= 0 and y >= 0 and w > 0 and h > 0 for x, y, w, h in rects)
 
-    def query(self, n, tries=3):
-        """Возвращает статус: 已放行 / 未放行 / 已叫号，未登车 / 已退回 / 无数据."""
+    def query_data(self, n, tries=3):
+        """Возвращает {"status", "ranking", "raw"}.
+
+        status: 已放行 / 未放行 / 已叫号，未登车 / 已退回 / 无数据.
+        ranking: реальное число машин впереди (только у не-прошедших), иначе None.
+        """
         c = code(n)
         last_error = None
         for attempt in range(1, tries + 1):
@@ -149,7 +160,10 @@ class Portal:
                     raise RuntimeError(f"{c}: ответ не JSON: {body[:200]}")
                 st = (data.get("status") or "").strip()
                 if st in KNOWN:
-                    return st
+                    raw_rank = data.get("ranking") or data.get("rankingNum") or ""
+                    raw_rank = str(raw_rank).strip()
+                    ranking = int(raw_rank) if raw_rank.isdigit() else None
+                    return {"status": st, "ranking": ranking, "raw": data}
                 raise RuntimeError(f"{c}: неизвестный статус {st!r}")
 
             text = body.strip().strip('"')
@@ -158,7 +172,7 @@ class Portal:
                 time.sleep(self.delay + 1)
                 continue
             if "查询无数据" in text:
-                return "无数据"
+                return {"status": "无数据", "ranking": None, "raw": None}
             if "验证未通过" in text:
                 # Токен капчи иногда не успевает обновиться — пробуем ещё раз.
                 # Если же портал реально показывает слайдер, нужен человек.
@@ -170,6 +184,10 @@ class Portal:
             raise RuntimeError(f"{c}: HTTP {resp.status}: {text[:200]}")
 
         raise RuntimeError(f"{c}: нет результата за {tries} попыток: {last_error}")
+
+    def query(self, n, tries=3):
+        """Статус строкой — для сборщика (ranking ему не нужен)."""
+        return self.query_data(n, tries)["status"]
 
 
 def bootstrap(portal, hint):

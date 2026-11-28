@@ -64,7 +64,7 @@
 <body>
 <main>
   <h1>Когда моя машина выедет из Хоргоса?</h1>
-  <p class="sub">Прогноз по табло очереди на выезд из Китая. Номер считается только у вас в браузере и никуда не отправляется.</p>
+  <p class="sub">Прогноз по табло очереди на выезд из Китая. Для ZLA место в очереди уточняется на официальном портале таможни; в логи номер не пишется.</p>
 
   <section class="card">
     <form id="f" autocomplete="off">
@@ -83,7 +83,7 @@
   <section class="card" id="result" hidden>
     <div class="k" id="r-cat"></div>
     <div class="grid">
-      <div><div class="k">Перед вами</div><div class="big" id="r-ahead"></div></div>
+      <div><div class="k">Машин перед вами</div><div class="big" id="r-ahead"></div><div class="hint" id="r-ahead-note"></div></div>
       <div><div class="k">Сейчас на табло</div><div class="big" id="r-cur"></div></div>
     </div>
     <div class="eta" id="r-eta-box">
@@ -114,7 +114,10 @@
   </section>
 
   <p class="foot">
-    Данные берутся с неофициального табло <a href="https://xorgos.com/" rel="noopener noreferrer" target="_blank">xorgos.com</a> раз в 15 минут.
+    Табло — с неофициального <a href="https://xorgos.com/" rel="noopener noreferrer" target="_blank">xorgos.com</a> раз в 15 минут.
+    Для ZLA число машин впереди и статус брони берутся с официального портала
+    <a href="https://www.horgoseport.com/#/public/zcyy" rel="noopener noreferrer" target="_blank">horgoseport.com</a>;
+    остальные категории — по табло.
     Прогноз — оценка по средней скорости за последние трое полных суток; диапазон — по самым быстрым и медленным суткам за две недели.
     Праздники, закрытия пункта пропуска и проверки могут сдвинуть сроки.
   </p>
@@ -191,7 +194,106 @@
     };
   }
 
+  var showSeq = 0;
+
+  function renderForecast(q, t, ahead, note) {
+    var boardAt = beijingToDate(data.board_time);
+    var s = stats(t);
+    $("r-ahead-note").textContent = note || "";
+
+    if (ahead <= 0) {
+      $("r-ahead").textContent = "0";
+      $("r-eta").textContent = "Автовоз с вашим номером пересёк границу";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "Табло дошло до " + q.prefix + String(t.current).padStart(6, "0") + ".";
+      return;
+    }
+
+    $("r-ahead").textContent = fmtInt.format(ahead);
+    if (!s.avg) {
+      $("r-eta").textContent = "Пока мало данных";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "";
+      return;
+    }
+    var eta = new Date(boardAt.getTime() + ahead / s.avg * DAY_MS);
+    var days = Math.ceil(ahead / s.avg);
+    $("r-eta").textContent = "≈ " + fmtDateWd.format(eta);
+    $("r-fast").textContent = s.fast > s.avg ? "быстро: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.fast * DAY_MS)) : "";
+    $("r-slow").textContent = s.slow < s.avg ? "медленно: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.slow * DAY_MS)) : "";
+    $("r-speed").textContent = "Средняя скорость " + Math.round(s.avg) + " в сутки (за " + s.n + " " +
+      plural(s.n, "полные сутки", "полных суток", "полных суток") + ") — примерно " + days + " " + plural(days, "день", "дня", "дней") + " ожидания.";
+  }
+
+  // Точное место в очереди ZLA: страница спрашивает сервис на Beelink,
+  // который открывает официальный портал таможни в headless-браузере.
+  var QUEUE_URL = "https://horgos-queue.pogovorim-chat.ru/queue";
+
+  function fallbackAhead(q, t) {
+    renderForecast(q, t, q.n - t.current, "оценка по номерам: таможня не ответила");
+  }
+
+  function applyAhead(q, t, d) {
+    var st = d.status || "";
+    if (st === "已退回") {
+      $("r-ahead").textContent = "—";
+      $("r-ahead-note").textContent = "";
+      $("r-eta").textContent = "Бронь отклонена — машины в очереди нет";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "";
+      return;
+    }
+    if (st === "无数据" || st === "无此预约编号") {
+      $("r-ahead").textContent = "—";
+      $("r-ahead-note").textContent = "";
+      $("r-eta").textContent = "Этого номера нет в очереди таможни";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "";
+      return;
+    }
+    if (d.ahead == null) { fallbackAhead(q, t); return; }
+    if (d.ahead === 0) {
+      $("r-ahead").textContent = "0";
+      $("r-ahead-note").textContent = "";
+      $("r-fast").textContent = ""; $("r-slow").textContent = "";
+      $("r-speed").textContent = "";
+      $("r-eta").textContent = st === "已放行"
+        ? "Автовоз с вашим номером пересёк границу"
+        : "Ваш номер следующий";
+      return;
+    }
+    renderForecast(q, t, d.ahead, "");
+  }
+
+  function queueAhead(q, t, seq) {
+    var key = "q05-queue-" + q.code;
+    var cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem(key) || "null"); } catch (e) {}
+    if (cached && Date.now() - cached.ts < 600000) {
+      if (seq === showSeq) applyAhead(q, t, cached);
+      return;
+    }
+
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 25000);
+    var done = function () { clearTimeout(timer); };
+    fetch(QUEUE_URL + "?num=" + encodeURIComponent(q.code),
+          { signal: ctrl ? ctrl.signal : undefined, cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), ahead: d.ahead, status: d.status })); } catch (e) {}
+        if (seq === showSeq) applyAhead(q, t, d);
+        done();
+      })
+      .catch(function () {
+        if (seq === showSeq) fallbackAhead(q, t);
+        done();
+      });
+  }
+
   function show(q) {
+    showSeq++;
+    var seq = showSeq;
     $("err").hidden = true;
     var t = data && data.types[q.prefix];
     if (!t) {
@@ -200,41 +302,31 @@
       $("err").hidden = false;
       return;
     }
-    var boardAt = beijingToDate(data.board_time);
-    var ahead = q.n - t.current;
-    var s = stats(t);
+    var aheadNum = q.n - t.current;
 
     $("r-cat").textContent = t.name + " (" + q.prefix + ") · ваш номер " + q.code;
     $("r-cur").textContent = fmtInt.format(t.current);
     $("r-note").hidden = true;
+    $("result").hidden = false;
 
-    if (ahead <= 0) {
-      $("r-ahead").textContent = "0";
-      $("r-eta").textContent = "Автовоз с вашим номером пересёк границу";
+    if (q.prefix === "ZLA" && aheadNum > 0) {
+      // Не показываем число по номерам даже на секунду: пользователь просил
+      // именно машины. Пока идёт запрос — «уточняем».
+      $("r-ahead").textContent = "…";
+      $("r-ahead-note").textContent = "уточняем на таможне";
+      $("r-eta").textContent = "Запрашиваем место в очереди…";
       $("r-fast").textContent = ""; $("r-slow").textContent = "";
-      $("r-speed").textContent = "Табло дошло до " + q.prefix + String(t.current).padStart(6, "0") + ".";
+      $("r-speed").textContent = "";
+      queueAhead(q, t, seq);
     } else {
-      $("r-ahead").textContent = fmtInt.format(ahead);
-      if (!s.avg) {
-        $("r-eta").textContent = "Пока мало данных";
-        $("r-fast").textContent = ""; $("r-slow").textContent = "";
-        $("r-speed").textContent = "";
-      } else {
-        var eta = new Date(boardAt.getTime() + ahead / s.avg * DAY_MS);
-        var days = Math.ceil(ahead / s.avg);
-        $("r-eta").textContent = "≈ " + fmtDateWd.format(eta);
-        $("r-fast").textContent = s.fast > s.avg ? "быстро: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.fast * DAY_MS)) : "";
-        $("r-slow").textContent = s.slow < s.avg ? "медленно: " + fmtDate.format(new Date(boardAt.getTime() + ahead / s.slow * DAY_MS)) : "";
-        $("r-speed").textContent = "Средняя скорость " + Math.round(s.avg) + " в сутки (за " + s.n + " " +
-          plural(s.n, "полные сутки", "полных суток", "полных суток") + ") — примерно " + days + " " + plural(days, "день", "дня", "дней") + " ожидания.";
-      }
+      renderForecast(q, t, aheadNum, "");
     }
+
     if (Date.now() - new Date(data.fetched_utc).getTime() > 3 * 3600000) {
       $("r-note").textContent = "Данные не обновлялись больше 3 часов — табло могло быть недоступно. Прогноз может быть устаревшим.";
       $("r-note").hidden = false;
     }
-    $("result").hidden = false;
-    drawChart(q.prefix, t, s.avg);
+    drawChart(q.prefix, t, stats(t).avg);
     highlight(q.prefix);
   }
 
